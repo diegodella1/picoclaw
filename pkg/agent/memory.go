@@ -128,8 +128,13 @@ func (ms *MemoryStore) GetRecentDailyNotes(days int) string {
 	return result
 }
 
+// maxMemoryChars is the maximum character length for the memory context
+// injected into the system prompt, to prevent context window bloat.
+const maxMemoryChars = 4000
+
 // GetMemoryContext returns formatted memory context for the agent prompt.
 // Includes long-term memory and recent daily notes.
+// Truncates to maxMemoryChars to prevent context window bloat.
 func (ms *MemoryStore) GetMemoryContext() string {
 	var parts []string
 
@@ -157,5 +162,12 @@ func (ms *MemoryStore) GetMemoryContext() string {
 		}
 		result += part
 	}
-	return fmt.Sprintf("# Memory\n\n%s", result)
+	result = fmt.Sprintf("# Memory\n\n%s", result)
+
+	// Auto-trim to prevent context window bloat
+	if len(result) > maxMemoryChars {
+		result = result[:maxMemoryChars] + "\n\n[...memory truncated for context efficiency]"
+	}
+
+	return result
 }

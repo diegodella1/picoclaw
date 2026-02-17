@@ -173,25 +173,47 @@ func (c *TelegramChannel) Send(ctx context.Context, msg bus.OutboundMessage) err
 		})
 	}
 
-	// Send media as photos if present
+	// Send media as photos or documents based on file type
 	if len(msg.Media) > 0 {
 		for _, mediaURL := range msg.Media {
-			photoParams := &telego.SendPhotoParams{
-				ChatID: tu.ID(chatID),
-				Photo:  tu.FileFromURL(mediaURL),
-			}
-			if msg.Content != "" {
-				photoParams.Caption = markdownToTelegramHTML(msg.Content)
-				photoParams.ParseMode = telego.ModeHTML
-			}
-			if _, photoErr := c.bot.SendPhoto(ctx, photoParams); photoErr != nil {
-				logger.ErrorCF("telegram", "Failed to send photo, falling back to text", map[string]interface{}{
-					"error": photoErr.Error(),
-					"url":   mediaURL,
-				})
-				break // fall through to text send below
+			if isImageURL(mediaURL) {
+				// Send as photo
+				photoParams := &telego.SendPhotoParams{
+					ChatID: tu.ID(chatID),
+					Photo:  tu.FileFromURL(mediaURL),
+				}
+				if msg.Content != "" {
+					photoParams.Caption = markdownToTelegramHTML(msg.Content)
+					photoParams.ParseMode = telego.ModeHTML
+				}
+				if _, photoErr := c.bot.SendPhoto(ctx, photoParams); photoErr != nil {
+					logger.ErrorCF("telegram", "Failed to send photo, falling back to text", map[string]interface{}{
+						"error": photoErr.Error(),
+						"url":   mediaURL,
+					})
+					break // fall through to text send below
+				} else {
+					return nil
+				}
 			} else {
-				return nil // photo sent successfully with caption
+				// Send as document (PDFs, CSVs, generic files)
+				docParams := &telego.SendDocumentParams{
+					ChatID:   tu.ID(chatID),
+					Document: tu.FileFromURL(mediaURL),
+				}
+				if msg.Content != "" {
+					docParams.Caption = markdownToTelegramHTML(msg.Content)
+					docParams.ParseMode = telego.ModeHTML
+				}
+				if _, docErr := c.bot.SendDocument(ctx, docParams); docErr != nil {
+					logger.ErrorCF("telegram", "Failed to send document, falling back to text", map[string]interface{}{
+						"error": docErr.Error(),
+						"url":   mediaURL,
+					})
+					break // fall through to text send below
+				} else {
+					return nil
+				}
 			}
 		}
 	}
@@ -571,6 +593,20 @@ func (c *TelegramChannel) handleCallbackQuery(ctx context.Context, update telego
 		"user_id":  userID,
 		"username": query.From.Username,
 	})
+}
+
+// isImageURL returns true if the URL points to a known image format or is a data URI image.
+func isImageURL(u string) bool {
+	if strings.HasPrefix(u, "data:image/") {
+		return true
+	}
+	lower := strings.ToLower(u)
+	for _, ext := range []string{".jpg", ".jpeg", ".png", ".gif", ".webp"} {
+		if strings.HasSuffix(lower, ext) || strings.Contains(lower, ext+"?") {
+			return true
+		}
+	}
+	return false
 }
 
 func parseChatID(chatIDStr string) (int64, error) {

@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/sipeed/picoclaw/pkg/bus"
@@ -41,6 +42,7 @@ type HeartbeatService struct {
 	enabled   bool
 	mu        sync.RWMutex
 	stopChan  chan struct{}
+	executing atomic.Bool
 }
 
 // NewHeartbeatService creates a new heartbeat service
@@ -129,6 +131,11 @@ func (hs *HeartbeatService) runLoop(stopChan chan struct{}) {
 
 	// Run first heartbeat after initial delay
 	time.AfterFunc(time.Second, func() {
+		defer func() {
+			if r := recover(); r != nil {
+				hs.logError("Initial heartbeat panic recovered: %v", r)
+			}
+		}()
 		hs.executeHeartbeat()
 	})
 
@@ -144,6 +151,20 @@ func (hs *HeartbeatService) runLoop(stopChan chan struct{}) {
 
 // executeHeartbeat performs a single heartbeat check
 func (hs *HeartbeatService) executeHeartbeat() {
+	// Prevent overlapping executions
+	if !hs.executing.CompareAndSwap(false, true) {
+		hs.logInfo("Heartbeat still running, skipping this tick")
+		return
+	}
+	defer hs.executing.Store(false)
+
+	// Panic recovery to prevent silent goroutine death
+	defer func() {
+		if r := recover(); r != nil {
+			hs.logError("Heartbeat panic recovered: %v", r)
+		}
+	}()
+
 	hs.mu.RLock()
 	enabled := hs.enabled
 	handler := hs.handler

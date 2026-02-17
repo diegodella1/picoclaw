@@ -19,6 +19,7 @@ import (
 
 	"github.com/sipeed/picoclaw/pkg/auth"
 	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/logger"
 )
 
 type HTTPProvider struct {
@@ -95,26 +96,68 @@ func (p *HTTPProvider) Chat(ctx context.Context, messages []Message, tools []Too
 		return nil, fmt.Errorf("failed to marshal request: %w", err)
 	}
 
-	req, err := http.NewRequestWithContext(ctx, "POST", p.apiBase+"/chat/completions", bytes.NewReader(jsonData))
-	if err != nil {
-		return nil, fmt.Errorf("failed to create request: %w", err)
+	// Retry loop with exponential backoff
+	maxRetries := 3
+	backoffs := []time.Duration{2 * time.Second, 4 * time.Second, 8 * time.Second}
+
+	var resp *http.Response
+	var body []byte
+	var lastErr error
+
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		if attempt > 0 {
+			logger.WarnCF("provider", "Retrying LLM request", map[string]interface{}{
+				"attempt": attempt + 1,
+				"backoff": backoffs[attempt-1].String(),
+			})
+			select {
+			case <-ctx.Done():
+				return nil, ctx.Err()
+			case <-time.After(backoffs[attempt-1]):
+			}
+		}
+
+		req, err := http.NewRequestWithContext(ctx, "POST", p.apiBase+"/chat/completions", bytes.NewReader(jsonData))
+		if err != nil {
+			return nil, fmt.Errorf("failed to create request: %w", err)
+		}
+
+		req.Header.Set("Content-Type", "application/json")
+		if p.apiKey != "" {
+			req.Header.Set("Authorization", "Bearer "+p.apiKey)
+		}
+
+		resp, err = p.httpClient.Do(req)
+		if err != nil {
+			lastErr = err
+			if attempt < maxRetries-1 {
+				continue
+			}
+			return nil, fmt.Errorf("failed to send request after %d attempts: %w", maxRetries, err)
+		}
+
+		body, err = io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			lastErr = err
+			if attempt < maxRetries-1 {
+				continue
+			}
+			return nil, fmt.Errorf("failed to read response after %d attempts: %w", maxRetries, err)
+		}
+
+		// Retry on rate limit or server errors
+		if resp.StatusCode == 429 || resp.StatusCode >= 500 {
+			lastErr = fmt.Errorf("API request failed (status %d)", resp.StatusCode)
+			if attempt < maxRetries-1 {
+				continue
+			}
+		}
+
+		break
 	}
 
-	req.Header.Set("Content-Type", "application/json")
-	if p.apiKey != "" {
-		req.Header.Set("Authorization", "Bearer "+p.apiKey)
-	}
-
-	resp, err := p.httpClient.Do(req)
-	if err != nil {
-		return nil, fmt.Errorf("failed to send request: %w", err)
-	}
-	defer resp.Body.Close()
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read response: %w", err)
-	}
+	_ = lastErr // suppress unused warning; used only in retry loop
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, fmt.Errorf("API request failed:\n  Status: %d\n  Body:   %s", resp.StatusCode, string(body))

@@ -115,6 +115,9 @@ func createToolRegistry(workspace string, restrict bool, cfg *config.Config, msg
 	// Translator
 	registry.Register(tools.NewTranslateTool())
 
+	// HTTP request
+	registry.Register(tools.NewHTTPRequestTool())
+
 	// Message tool - available to both agent and subagent
 	// Subagent uses it to communicate directly with user
 	messageTool := tools.NewMessageTool()
