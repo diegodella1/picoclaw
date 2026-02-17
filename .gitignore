@@ -44,3 +44,4 @@ tasks/
 
 # Added by goreleaser init:
 dist/
+client_secret_*.json
