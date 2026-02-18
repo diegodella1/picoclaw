@@ -28,6 +28,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/channels"
 	"github.com/sipeed/picoclaw/pkg/config"
+	"github.com/sipeed/picoclaw/pkg/council"
 	"github.com/sipeed/picoclaw/pkg/cron"
 	"github.com/sipeed/picoclaw/pkg/devices"
 	"github.com/sipeed/picoclaw/pkg/heartbeat"
@@ -565,6 +566,26 @@ func gatewayCmd() {
 
 	// Setup cron tool and service
 	cronService := setupCronTool(agentLoop, msgBus, cfg.WorkspacePath())
+
+	// Council setup
+	if cfg.Council.Enabled && len(cfg.Council.Members) > 0 {
+		councilInstance, err := council.NewCouncil(cfg.Council, provider, cfg.Agents.Defaults.Model, cfg.WorkspacePath())
+		if err != nil {
+			fmt.Printf("⚠ Council init failed: %v\n", err)
+		} else {
+			councilTool := tools.NewCouncilTool(councilInstance)
+			councilTool.SetSendCallback(func(channel, chatID, content string) error {
+				msgBus.PublishOutbound(bus.OutboundMessage{
+					Channel: channel,
+					ChatID:  chatID,
+					Content: content,
+				})
+				return nil
+			})
+			agentLoop.RegisterTool(councilTool)
+			fmt.Printf("✓ Council enabled with %d members\n", len(cfg.Council.Members))
+		}
+	}
 
 	heartbeatService := heartbeat.NewHeartbeatService(
 		cfg.WorkspacePath(),

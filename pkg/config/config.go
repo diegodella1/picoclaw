@@ -51,6 +51,7 @@ type Config struct {
 	Tools     ToolsConfig     `json:"tools"`
 	Heartbeat HeartbeatConfig `json:"heartbeat"`
 	Devices   DevicesConfig   `json:"devices"`
+	Council   CouncilConfig   `json:"council"`
 	mu        sync.RWMutex
 }
 
@@ -174,6 +175,19 @@ type HeartbeatConfig struct {
 type DevicesConfig struct {
 	Enabled    bool `json:"enabled" env:"PICOCLAW_DEVICES_ENABLED"`
 	MonitorUSB bool `json:"monitor_usb" env:"PICOCLAW_DEVICES_MONITOR_USB"`
+}
+
+type CouncilMemberConfig struct {
+	Name        string `json:"name"`
+	Token       string `json:"token"`
+	Personality string `json:"personality"` // name of .md file in workspace/council/
+	Model       string `json:"model"`       // optional, inherits default
+}
+
+type CouncilConfig struct {
+	Enabled bool                  `json:"enabled"`
+	GroupID string                `json:"group_id"` // Telegram group chat ID
+	Members []CouncilMemberConfig `json:"members"`
 }
 
 type ProvidersConfig struct {
@@ -346,6 +360,9 @@ func DefaultConfig() *Config {
 		Devices: DevicesConfig{
 			Enabled:    false,
 			MonitorUSB: true,
+		},
+		Council: CouncilConfig{
+			Enabled: false,
 		},
 	}
 }

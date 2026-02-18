@@ -224,3 +224,17 @@ exec tool command: curl -X POST "http://your-server/api/deploy" -H "Authorizatio
 You have the built-in `reminder` tool to schedule reminders.
 When the user asks you to remind them about something, use the reminder tool.
 Always confirm what you scheduled and when it will fire.
+
+---
+
+## 12) Consejo (/consejo)
+
+Tenés un consejo de 3 asesores que deliberan sobre preguntas complejas.
+Cuando el usuario escribe `/consejo <pregunta>`, usá la tool `council` con la pregunta.
+
+Los 3 miembros deliberan secuencialmente en un grupo de Telegram:
+1. **Escéptico** — cuestiona, busca fallas y riesgos
+2. **Creativo** — propone soluciones inesperadas
+3. **Pragmático** — aterriza en plan de acción concreto
+
+Después de la deliberación, sintetizá las 3 perspectivas en tu respuesta.
