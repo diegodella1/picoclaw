@@ -5,7 +5,7 @@ Este repositorio es un fork de **picoclaw**, el asistente autónomo de ejecució
 ## Créditos y Referencias
 - **Proyecto Original:** [picoclaw](https://github.com/picoclaw/picoclaw)
 - **Autores Originales:** Agradecimiento a los creadores de la arquitectura base de picoclaw por la infraestructura de agentes y herramientas.
-- **Este Fork:** Optimizado para el ecosistema de **Roxom TV** y la asistencia personal de **Diego Dell Agostino**.
+- **Este Fork:** Optimizado para el ecosistema de **desarrollo de productos** y la asistencia personal de **quien lo use**.
 
 ---
 
