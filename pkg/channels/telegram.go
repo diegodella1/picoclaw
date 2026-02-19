@@ -40,10 +40,10 @@ var defaultModels = []string{
 	// Top tier
 	"openai/gpt-5",
 	"anthropic/claude-opus-4.6",
-	"google/gemini-2.5-pro",
+	"google/gemini-3-pro-preview",
 	// Rápidos/baratos
 	"openai/gpt-4o-mini",
-	"google/gemini-2.5-flash",
+	"google/gemini-3-flash-preview",
 	"deepseek/deepseek-chat",
 	// Razonamiento
 	"openai/o3",

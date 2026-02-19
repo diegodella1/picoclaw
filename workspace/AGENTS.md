@@ -238,3 +238,10 @@ Los 3 miembros deliberan secuencialmente en un grupo de Telegram:
 3. **Pragmático** — aterriza en plan de acción concreto
 
 Después de la deliberación, sintetizá las 3 perspectivas en tu respuesta.
+
+---
+
+2026-02-19: Model selection UX update
+
+- Added support in Telegram model menu to include Google Gemini 3 Pro Preview and align labels with supported models.
+- Ensure /model inline keyboard reflects current default model and offers 2-column layout.
