@@ -9,6 +9,7 @@ import (
 )
 
 // validatePath ensures the given path is within the workspace if restrict is true.
+// Paths under /hostfs/ are always allowed (host filesystem access via bind mount).
 func validatePath(path, workspace string, restrict bool) (string, error) {
 	if workspace == "" {
 		return path, nil
@@ -27,6 +28,11 @@ func validatePath(path, workspace string, restrict bool) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("failed to resolve file path: %w", err)
 		}
+	}
+
+	// Allow host filesystem access via /hostfs/ mount
+	if strings.HasPrefix(absPath, "/hostfs/") {
+		return absPath, nil
 	}
 
 	if restrict && !strings.HasPrefix(absPath, absWorkspace) {

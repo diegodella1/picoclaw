@@ -74,6 +74,9 @@ func createToolRegistry(workspace string, restrict bool, cfg *config.Config, msg
 	// Shell execution
 	registry.Register(tools.NewExecTool(workspace, restrict))
 
+	// Host execution via nsenter (requires --privileged --pid=host)
+	registry.Register(tools.NewHostExecTool())
+
 	if searchTool := tools.NewWebSearchTool(tools.WebSearchToolOptions{
 		BraveAPIKey:          cfg.Tools.Web.Brave.APIKey,
 		BraveMaxResults:      cfg.Tools.Web.Brave.MaxResults,
