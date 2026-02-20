@@ -12,7 +12,8 @@ import (
 )
 
 // HostExecTool executes commands on the host system via nsenter.
-// Requires the container to run with --privileged --pid=host.
+// Requires the container to run with --privileged and / mounted at /hostfs.
+// Uses explicit namespace paths from /hostfs/proc/1/ns/ to enter the host namespaces.
 type HostExecTool struct {
 	timeout      time.Duration
 	denyPatterns []*regexp.Regexp
@@ -92,8 +93,16 @@ func (t *HostExecTool) Execute(ctx context.Context, args map[string]interface{})
 	cmdCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	// nsenter into PID 1's namespaces = run on the host
-	cmd := exec.CommandContext(cmdCtx, "nsenter", "-t", "1", "-m", "-u", "-i", "-n", "-p", "--", "sh", "-c", shellCmd)
+	// Enter the host's namespaces via explicit ns paths from /hostfs/proc/1/ns/
+	// PID namespace is skipped (requires --pid=host which Coolify doesn't support)
+	// This still gives full access to: filesystem, docker, networking, apt, etc.
+	cmd := exec.CommandContext(cmdCtx, "nsenter",
+		"--mount=/hostfs/proc/1/ns/mnt",
+		"--uts=/hostfs/proc/1/ns/uts",
+		"--ipc=/hostfs/proc/1/ns/ipc",
+		"--net=/hostfs/proc/1/ns/net",
+		"--root=/hostfs",
+		"--", "sh", "-c", shellCmd)
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	var stdout, stderr bytes.Buffer
