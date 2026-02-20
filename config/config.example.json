@@ -111,10 +111,24 @@
   },
   "tools": {
     "web": {
-      "search": {
+      "serper": {
+        "enabled": false,
+        "api_key": "YOUR_SERPER_API_KEY",
+        "max_results": 5
+      },
+      "brave": {
+        "enabled": false,
         "api_key": "YOUR_BRAVE_API_KEY",
         "max_results": 5
+      },
+      "duckduckgo": {
+        "enabled": true,
+        "max_results": 5
       }
+    },
+    "google": {
+      "service_account_file": "",
+      "impersonate_email": ""
     }
   },
   "heartbeat": {
