@@ -60,9 +60,11 @@ Built in Go, containerized with Docker, and deployed via Coolify. Zero cloud dep
 - **Tasks** — Persistent goal and task tracking
 - **Snippets** — Save and retrieve code snippets
 - **Cron jobs** — Scheduled background tasks (JSON-configured)
-- **Heartbeat** — Periodic check-ins with proactive notifications
+- **Heartbeat** — Periodic check-ins with proactive notifications (every 45min)
+- **Telemetry** — Token usage tracking per feature (chat, heartbeat, cron, summarize) with daily breakdown, 30-day retention
 
-### Infrastructure & Hardware
+### Monitoring & Hardware
+- **Sentinel** — Go-pure system health monitor (CPU temp, RAM, disk) every 2min with critical alerts direct to Telegram
 - **Shell execution** — Run commands inside the container
 - **Host access** — Execute commands on the Raspberry Pi host via `nsenter`
 - **I2C / SPI** — Direct hardware bus interaction for IoT peripherals
@@ -95,7 +97,7 @@ Built in Go, containerized with Docker, and deployed via Coolify. Zero cloud dep
                     │                           │             │
                     │              ┌────────────▼──────────┐  │
                     │              │     ToolRegistry      │  │
-                    │              │  26 tools available   │  │
+                    │              │  27 tools available   │  │
                     │              └───────────────────────┘  │
                     │                                         │
                     │  LLM: OpenRouter ──► GPT-4o / Claude /  │
@@ -110,9 +112,11 @@ Built in Go, containerized with Docker, and deployed via Coolify. Zero cloud dep
 | Agent Loop | `pkg/agent/loop.go` | Core message processing, LLM iteration, tool execution |
 | Context Builder | `pkg/agent/context.go` | System prompt assembly (identity + skills + memory) |
 | Telegram Channel | `pkg/channels/telegram.go` | Polling, TTS, voice transcription, inline keyboards |
-| Tool Registry | `pkg/tools/` | 26 tools — web, calendar, exec, memory, media, etc. |
+| Tool Registry | `pkg/tools/` | 27 tools — web, calendar, exec, memory, media, telemetry, etc. |
 | Config | `pkg/config/config.go` | JSON config with env var overrides |
 | Session Manager | `pkg/session/` | Conversation history, summarization, persistence |
+| Sentinel | `pkg/sentinel/service.go` | System health monitor (CPU temp, RAM, disk) with alerts |
+| Telemetry | `pkg/telemetry/tracker.go` | Token usage tracking per feature per day |
 
 ### Search Provider Priority
 
