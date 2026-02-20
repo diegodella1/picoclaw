@@ -234,8 +234,14 @@ type WebToolsConfig struct {
 	DuckDuckGo DuckDuckGoConfig `json:"duckduckgo"`
 }
 
+type GoogleConfig struct {
+	ServiceAccountFile string `json:"service_account_file"`
+	ImpersonateEmail   string `json:"impersonate_email"`
+}
+
 type ToolsConfig struct {
-	Web WebToolsConfig `json:"web"`
+	Web    WebToolsConfig `json:"web"`
+	Google GoogleConfig   `json:"google"`
 }
 
 func DefaultConfig() *Config {

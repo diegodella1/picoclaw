@@ -121,6 +121,21 @@ func createToolRegistry(workspace string, restrict bool, cfg *config.Config, msg
 	// HTTP request
 	registry.Register(tools.NewHTTPRequestTool())
 
+	// Google Workspace tools (Gmail, Calendar, Drive)
+	if cfg.Tools.Google.ServiceAccountFile != "" && cfg.Tools.Google.ImpersonateEmail != "" {
+		saFile := cfg.Tools.Google.ServiceAccountFile
+		email := cfg.Tools.Google.ImpersonateEmail
+		if t := tools.NewGmailTool(saFile, email); t != nil {
+			registry.Register(t)
+		}
+		if t := tools.NewCalendarTool(saFile, email); t != nil {
+			registry.Register(t)
+		}
+		if t := tools.NewGDriveTool(saFile, email); t != nil {
+			registry.Register(t)
+		}
+	}
+
 	// Message tool - available to both agent and subagent
 	// Subagent uses it to communicate directly with user
 	messageTool := tools.NewMessageTool()
