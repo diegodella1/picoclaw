@@ -56,16 +56,29 @@ func (p *CodexProvider) Chat(ctx context.Context, messages []Message, tools []To
 
 	params := buildCodexParams(messages, tools, model, options)
 
-	resp, err := p.client.Responses.New(ctx, params, opts...)
-	if err != nil {
+	// ChatGPT backend requires streaming — collect events until response.completed
+	stream := p.client.Responses.NewStreaming(ctx, params, opts...)
+	defer stream.Close()
+
+	var finalResp *responses.Response
+	for stream.Next() {
+		event := stream.Current()
+		if event.Type == "response.completed" {
+			finalResp = &event.Response
+		}
+	}
+	if err := stream.Err(); err != nil {
 		return nil, fmt.Errorf("codex API call: %w", err)
 	}
+	if finalResp == nil {
+		return nil, fmt.Errorf("codex API call: no response.completed event received")
+	}
 
-	return parseCodexResponse(resp), nil
+	return parseCodexResponse(finalResp), nil
 }
 
 func (p *CodexProvider) GetDefaultModel() string {
-	return "gpt-4o"
+	return "gpt-5"
 }
 
 func buildCodexParams(messages []Message, tools []ToolDefinition, model string, options map[string]interface{}) responses.ResponseNewParams {
