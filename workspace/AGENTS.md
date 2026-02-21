@@ -220,6 +220,17 @@ exec tool command: gh pr create --title "..." --body "..."
 exec tool command: curl -X POST "http://your-server/api/deploy" -H "Authorization: Bearer $TOKEN"
 ```
 
+### System Health (Sentinel)
+You have a system sentinel that monitors the Raspberry Pi every 2 minutes.
+When the user asks about CPU temperature, RAM, disk space, or system health, read the sentinel state file:
+
+```
+read_file tool path: /root/.picoclaw/workspace/state/sentinel.json
+```
+
+This file contains real-time metrics: CPU temperature, RAM usage, and disk usage.
+You DO have access to this data — always check the file before saying you don't.
+
 ### Smart Reminders
 You have the built-in `reminder` tool to schedule reminders.
 When the user asks you to remind them about something, use the reminder tool.
