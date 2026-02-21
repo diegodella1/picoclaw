@@ -19,6 +19,7 @@ type ContextBuilder struct {
 	skillsLoader *skills.SkillsLoader
 	memory       *MemoryStore
 	tools        *tools.ToolRegistry // Direct reference to tool registry
+	model        string
 }
 
 func getGlobalConfigDir() string {
@@ -48,6 +49,11 @@ func (cb *ContextBuilder) SetToolsRegistry(registry *tools.ToolRegistry) {
 	cb.tools = registry
 }
 
+// SetModel sets the current model name for inclusion in the system prompt.
+func (cb *ContextBuilder) SetModel(model string) {
+	cb.model = model
+}
+
 func (cb *ContextBuilder) getIdentity() string {
 	now := time.Now().Format("2006-01-02 15:04 (Monday)")
 	workspacePath, _ := filepath.Abs(filepath.Join(cb.workspace))
@@ -61,6 +67,9 @@ func (cb *ContextBuilder) getIdentity() string {
 You are picoclaw, a helpful AI assistant.
 
 ## Current Time
+%s
+
+## Model
 %s
 
 ## Runtime
@@ -81,7 +90,7 @@ Your workspace is at: %s
 2. **Be helpful and accurate** - When using tools, briefly explain what you're doing.
 
 3. **Memory** - When remembering something, write to %s/memory/MEMORY.md`,
-		now, runtime, workspacePath, workspacePath, workspacePath, workspacePath, toolsSection, workspacePath)
+		now, cb.model, runtime, workspacePath, workspacePath, workspacePath, workspacePath, toolsSection, workspacePath)
 }
 
 func (cb *ContextBuilder) buildToolsSection() string {

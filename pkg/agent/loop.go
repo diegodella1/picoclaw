@@ -189,6 +189,7 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 	// Create context builder and set tools registry
 	contextBuilder := NewContextBuilder(workspace)
 	contextBuilder.SetToolsRegistry(toolsRegistry)
+	contextBuilder.SetModel(cfg.Agents.Defaults.Model)
 
 	// Wire system prompt builder so subagents inherit the main agent's personality
 	subagentManager.SetSystemPromptBuilder(contextBuilder.BuildSystemPrompt)
@@ -453,6 +454,7 @@ func (al *AgentLoop) handleModelCommand(content string) (string, bool) {
 
 		oldModel := al.model
 		al.model = newModel
+		al.contextBuilder.SetModel(newModel)
 
 		// Update config and persist
 		al.cfg.Agents.Defaults.Model = newModel
