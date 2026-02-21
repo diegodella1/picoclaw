@@ -26,6 +26,8 @@ RUN apt-get update && \
     pip3 install edge-tts --break-system-packages && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+ENV TZ=America/Argentina/Buenos_Aires
+
 # Copy binary
 COPY --from=builder /picoclaw /usr/local/bin/picoclaw
 
