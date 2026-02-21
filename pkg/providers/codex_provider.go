@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strings"
 
 	"github.com/openai/openai-go/v3"
@@ -55,6 +56,11 @@ func (p *CodexProvider) Chat(ctx context.Context, messages []Message, tools []To
 	}
 
 	params := buildCodexParams(messages, tools, model, options)
+
+	// Debug: log the serialized params
+	if debugJSON, err := json.Marshal(params); err == nil {
+		log.Printf("[DEBUG] Codex request params: %s", string(debugJSON))
+	}
 
 	// ChatGPT backend requires streaming — collect events until response.completed
 	stream := p.client.Responses.NewStreaming(ctx, params, opts...)
