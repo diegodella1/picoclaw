@@ -27,6 +27,10 @@ RUN apt-get update && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 ENV TZ=America/Argentina/Buenos_Aires
+ENV GH_CONFIG_DIR=/hostfs/home/diego/.config/gh
+
+# Symlink host gh binary (available via /hostfs bind mount)
+RUN ln -s /hostfs/usr/bin/gh /usr/local/bin/gh
 
 # Copy binary
 COPY --from=builder /picoclaw /usr/local/bin/picoclaw
