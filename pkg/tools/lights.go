@@ -1,12 +1,14 @@
 package tools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"math"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -26,7 +28,7 @@ const (
 var (
 	mhCmdOn    = []byte{0x71, 0x23, 0x0F}
 	mhCmdOff   = []byte{0x71, 0x24, 0x0F}
-	mhCmdQuery = []byte{0x81, 0x8A, 0x8B, 0x96}
+	mhCmdQuery = []byte{0x81, 0x8A, 0x8B}
 )
 
 // Predefined patterns with codes
@@ -118,7 +120,15 @@ func (t *LightsTool) Parameters() map[string]interface{} {
 			"device_type": map[string]interface{}{
 				"type":        "string",
 				"enum":        []string{"led_strip", "lightbulb", "rgb_controller", "unknown"},
-				"description": "Device type (optional for save, auto-detected from model)",
+				"description": "Device type (optional for save)",
+			},
+			"mac": map[string]interface{}{
+				"type":        "string",
+				"description": "MAC address (optional for save, from discover results)",
+			},
+			"model": map[string]interface{}{
+				"type":        "string",
+				"description": "Model string (optional for save, from discover results)",
 			},
 			"r": map[string]interface{}{
 				"type":        "number",
@@ -219,6 +229,8 @@ func (t *LightsTool) save(args map[string]interface{}) *ToolResult {
 	}
 
 	devType, _ := args["device_type"].(string)
+	mac, _ := args["mac"].(string)
+	model, _ := args["model"].(string)
 
 	t.mu.Lock()
 	defer t.mu.Unlock()
@@ -232,19 +244,11 @@ func (t *LightsTool) save(args map[string]interface{}) *ToolResult {
 		}
 	}
 
-	// Try to get MAC/model from discovery if available
-	var mac, model string
-	discovered, _ := mhDiscover()
-	for _, dd := range discovered {
-		if dd.IP == ip {
-			mac = dd.MAC
-			model = dd.Model
-			break
-		}
-	}
-
-	if devType == "" {
+	if devType == "" && model != "" {
 		devType = classifyFromModel(model)
+	}
+	if devType == "" {
+		devType = "unknown"
 	}
 
 	now := time.Now().Format(time.RFC3339)
@@ -579,6 +583,62 @@ func (t *LightsTool) saveDevices(devices []LightDevice) error {
 // --- Magic Home protocol ---
 
 func mhDiscover() ([]discoveredDevice, error) {
+	// If running inside a Docker container, UDP broadcast won't reach the LAN.
+	// Use nsenter to run discovery from the host's network namespace.
+	if _, err := os.Stat("/hostfs/proc/1/ns/net"); err == nil {
+		return mhDiscoverViaHost()
+	}
+	return mhDiscoverDirect()
+}
+
+// mhDiscoverViaHost runs discovery via nsenter into the host network namespace.
+// This is needed when running in a Docker container with bridge networking.
+func mhDiscoverViaHost() ([]discoveredDevice, error) {
+	// Python script that does the UDP broadcast discovery from host network
+	script := `
+import socket, json
+sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+sock.setsockopt(socket.SOL_SOCKET, socket.SO_BROADCAST, 1)
+sock.settimeout(3)
+sock.sendto(b'HF-A11ASSISTHREAD', ('255.255.255.255', 48899))
+devices = []
+seen = set()
+try:
+    while True:
+        data, addr = sock.recvfrom(1024)
+        msg = data.decode().strip()
+        if msg == 'HF-A11ASSISTHREAD':
+            continue
+        parts = msg.split(',', 2)
+        if len(parts) >= 3 and parts[0] not in seen:
+            seen.add(parts[0])
+            devices.append({"ip": parts[0].strip(), "mac": parts[1].strip(), "model": parts[2].strip()})
+except socket.timeout:
+    pass
+sock.close()
+print(json.dumps(devices))
+`
+	cmd := exec.Command("nsenter",
+		"--net=/hostfs/proc/1/ns/net",
+		"--", "python3", "-c", script)
+
+	var stdout, stderr bytes.Buffer
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+
+	if err := cmd.Run(); err != nil {
+		return nil, fmt.Errorf("nsenter discovery failed: %v (stderr: %s)", err, stderr.String())
+	}
+
+	var devices []discoveredDevice
+	if err := json.Unmarshal(stdout.Bytes(), &devices); err != nil {
+		return nil, fmt.Errorf("failed to parse discovery output: %v", err)
+	}
+	return devices, nil
+}
+
+// mhDiscoverDirect does UDP broadcast discovery directly (works on host or --network host).
+func mhDiscoverDirect() ([]discoveredDevice, error) {
 	addr, err := net.ResolveUDPAddr("udp4", "255.255.255.255:48899")
 	if err != nil {
 		return nil, err
@@ -668,8 +728,11 @@ func mhQueryState(ip string) (*mhState, error) {
 
 	conn.SetDeadline(time.Now().Add(mhTCPTimeout))
 
-	// Send query command (already includes checksum in the constant)
-	_, err = conn.Write(mhCmdQuery)
+	// Send query command with checksum
+	packet := make([]byte, len(mhCmdQuery)+1)
+	copy(packet, mhCmdQuery)
+	packet[len(mhCmdQuery)] = mhChecksum(mhCmdQuery)
+	_, err = conn.Write(packet)
 	if err != nil {
 		return nil, fmt.Errorf("write failed: %v", err)
 	}
