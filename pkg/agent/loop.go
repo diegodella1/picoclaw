@@ -121,6 +121,9 @@ func createToolRegistry(workspace string, restrict bool, cfg *config.Config, msg
 	// Snippets
 	registry.Register(tools.NewSnippetTool(workspace))
 
+	// Smart lights (Magic Home WiFi)
+	registry.Register(tools.NewLightsTool(workspace))
+
 	// Translator
 	registry.Register(tools.NewTranslateTool())
 
