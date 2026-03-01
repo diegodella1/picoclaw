@@ -46,6 +46,7 @@ type AgentLoop struct {
 	cfg            *config.Config // Reference to config for runtime updates
 	configPath     string         // Path to config.json for persistence
 	tracker        *telemetry.Tracker
+	subagentMgr    *tools.SubagentManager
 }
 
 // processOptions configures how a message is processed
@@ -211,6 +212,7 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 		summarizing:    sync.Map{},
 		cfg:            cfg,
 		configPath:     configPath,
+		subagentMgr:    subagentManager,
 	}
 }
 
@@ -363,6 +365,11 @@ func (al *AgentLoop) processMessage(ctx context.Context, msg bus.InboundMessage)
 		return resp, nil, err
 	}
 
+	// Handle /provider command
+	if response, handled := al.handleProviderCommand(msg.Content); handled {
+		return response, nil, nil
+	}
+
 	// Handle /model command
 	if response, handled := al.handleModelCommand(msg.Content); handled {
 		return response, nil, nil
@@ -479,6 +486,92 @@ func (al *AgentLoop) handleModelCommand(content string) (string, bool) {
 	}
 
 	return "", false
+}
+
+// defaultProviderModels maps provider names to their default model.
+var defaultProviderModels = map[string]string{
+	"openai":     "gpt-5",
+	"openrouter": "anthropic/claude-sonnet-4",
+	"groq":       "llama-3.3-70b-versatile",
+	"anthropic":  "claude-sonnet-4-20250514",
+	"deepseek":   "deepseek-chat",
+	"gemini":     "gemini-2.5-flash",
+}
+
+// handleProviderCommand handles the /provider command to view or change the current provider at runtime.
+// Returns the response string and true if the command was handled.
+func (al *AgentLoop) handleProviderCommand(content string) (string, bool) {
+	trimmed := strings.TrimSpace(content)
+
+	if trimmed == "/provider" {
+		return fmt.Sprintf("Current provider: %s (model: %s)", al.cfg.Agents.Defaults.Provider, al.model), true
+	}
+
+	if !strings.HasPrefix(trimmed, "/provider ") {
+		return "", false
+	}
+
+	newProvider := strings.TrimSpace(strings.TrimPrefix(trimmed, "/provider "))
+	if newProvider == "" {
+		return fmt.Sprintf("Current provider: %s (model: %s)", al.cfg.Agents.Defaults.Provider, al.model), true
+	}
+	newProvider = strings.ToLower(newProvider)
+
+	oldProvider := al.cfg.Agents.Defaults.Provider
+	oldModel := al.model
+
+	// Save old values for rollback
+	savedProvider := al.cfg.Agents.Defaults.Provider
+	savedModel := al.cfg.Agents.Defaults.Model
+
+	// Update config for CreateProvider
+	al.cfg.Agents.Defaults.Provider = newProvider
+
+	// Set default model for the new provider
+	newModel := oldModel
+	if dm, ok := defaultProviderModels[newProvider]; ok {
+		newModel = dm
+	}
+	al.cfg.Agents.Defaults.Model = newModel
+
+	// Try creating the new provider
+	newProv, err := providers.CreateProvider(al.cfg)
+	if err != nil {
+		// Rollback
+		al.cfg.Agents.Defaults.Provider = savedProvider
+		al.cfg.Agents.Defaults.Model = savedModel
+		return fmt.Sprintf("Error al cambiar a %s: %v", newProvider, err), true
+	}
+
+	// Swap provider and model
+	al.provider = newProv
+	al.model = newModel
+	al.contextBuilder.SetModel(newModel)
+
+	// Propagate to subagent manager
+	if al.subagentMgr != nil {
+		al.subagentMgr.SetProvider(newProv)
+		al.subagentMgr.SetDefaultModel(newModel)
+	}
+
+	// Persist config
+	if al.configPath != "" {
+		if err := config.SaveConfig(al.configPath, al.cfg); err != nil {
+			logger.WarnCF("agent", "Failed to persist provider change",
+				map[string]interface{}{"error": err.Error()})
+			return fmt.Sprintf("Provider: %s → %s, Model: %s → %s (warning: no se pudo guardar config)", oldProvider, newProvider, oldModel, newModel), true
+		}
+	}
+
+	logger.InfoCF("agent", "Provider changed via /provider command",
+		map[string]interface{}{
+			"old_provider": oldProvider,
+			"new_provider": newProvider,
+			"old_model":    oldModel,
+			"new_model":    newModel,
+		})
+
+	return fmt.Sprintf("Provider: %s → %s\nModel: %s → %s", oldProvider, newProvider, oldModel, newModel), true
 }
 
 // runAgentLoop is the core message processing logic.

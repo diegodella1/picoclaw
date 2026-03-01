@@ -50,6 +50,20 @@ func NewSubagentManager(provider providers.LLMProvider, defaultModel, workspace 
 	}
 }
 
+// SetProvider swaps the LLM provider used by subagents at runtime.
+func (sm *SubagentManager) SetProvider(p providers.LLMProvider) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.provider = p
+}
+
+// SetDefaultModel changes the default model used by subagents at runtime.
+func (sm *SubagentManager) SetDefaultModel(model string) {
+	sm.mu.Lock()
+	defer sm.mu.Unlock()
+	sm.defaultModel = model
+}
+
 // SetSystemPromptBuilder sets a function that builds the system prompt dynamically.
 // This allows subagents to inherit the main agent's personality and context.
 func (sm *SubagentManager) SetSystemPromptBuilder(fn SystemPromptBuilder) {

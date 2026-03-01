@@ -263,6 +263,30 @@ func createCodexAuthProvider() (LLMProvider, error) {
 	return NewCodexProviderWithTokenSource(cred.AccessToken, cred.AccountID, createCodexTokenSource()), nil
 }
 
+// AvailableProviders returns the names of providers that have credentials configured.
+func AvailableProviders(cfg *config.Config) []string {
+	var available []string
+	if cfg.Providers.OpenAI.APIKey != "" || cfg.Providers.OpenAI.AuthMethod != "" {
+		available = append(available, "openai")
+	}
+	if cfg.Providers.OpenRouter.APIKey != "" {
+		available = append(available, "openrouter")
+	}
+	if cfg.Providers.Groq.APIKey != "" {
+		available = append(available, "groq")
+	}
+	if cfg.Providers.Anthropic.APIKey != "" || cfg.Providers.Anthropic.AuthMethod != "" {
+		available = append(available, "anthropic")
+	}
+	if cfg.Providers.Gemini.APIKey != "" {
+		available = append(available, "gemini")
+	}
+	if cfg.Providers.DeepSeek.APIKey != "" {
+		available = append(available, "deepseek")
+	}
+	return available
+}
+
 func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 	model := cfg.Agents.Defaults.Model
 	providerName := strings.ToLower(cfg.Agents.Defaults.Provider)

@@ -20,6 +20,7 @@ import (
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/logger"
+	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/utils"
 	"github.com/sipeed/picoclaw/pkg/voice"
 )
@@ -58,6 +59,16 @@ var defaultModels = []string{
 	"gpt-5-codex",
 	"gpt-5.1-codex-max",
 	"gpt-5",
+}
+
+// providerModels maps provider names to their available models for the keyboard menu.
+var providerModels = map[string][]string{
+	"openai":     {"gpt-5", "gpt-5-codex", "gpt-5.2-codex", "gpt-5.3-codex", "gpt-5.1-codex-max"},
+	"openrouter": {"anthropic/claude-sonnet-4", "openai/gpt-5", "google/gemini-2.5-flash", "deepseek/deepseek-chat-v3-0324", "meta-llama/llama-4-maverick"},
+	"groq":       {"llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"},
+	"anthropic":  {"claude-sonnet-4-20250514", "claude-opus-4-20250514"},
+	"deepseek":   {"deepseek-chat", "deepseek-reasoner"},
+	"gemini":     {"gemini-2.5-flash", "gemini-2.5-pro"},
 }
 
 type thinkingCancel struct {
@@ -384,6 +395,12 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, update telego.Updat
 	chatID := message.Chat.ID
 	c.chatIDs[senderID] = chatID
 
+	// Intercept bare /provider command → show inline keyboard
+	if text := strings.TrimSpace(message.Text); text == "/provider" {
+		c.sendProviderMenu(ctx, chatID)
+		return
+	}
+
 	// Intercept bare /model command → show inline keyboard
 	if text := strings.TrimSpace(message.Text); text == "/model" {
 		c.sendModelMenu(ctx, chatID)
@@ -641,7 +658,13 @@ func (c *TelegramChannel) extractPDFText(pdfPath string) string {
 func (c *TelegramChannel) sendModelMenu(ctx context.Context, chatID int64) {
 	models := c.appConfig.Agents.Defaults.AvailableModels
 	if len(models) == 0 {
-		models = defaultModels
+		// Use provider-specific models if available
+		currentProvider := strings.ToLower(c.appConfig.Agents.Defaults.Provider)
+		if pm, ok := providerModels[currentProvider]; ok {
+			models = pm
+		} else {
+			models = defaultModels
+		}
 	}
 	currentModel := c.appConfig.Agents.Defaults.Model
 
@@ -665,28 +688,72 @@ func (c *TelegramChannel) sendModelMenu(ctx context.Context, chatID int64) {
 	}
 }
 
-func (c *TelegramChannel) handleCallbackQuery(ctx context.Context, update telego.Update) {
-	query := update.CallbackQuery
-	if query == nil || !strings.HasPrefix(query.Data, "model:") {
+func (c *TelegramChannel) sendProviderMenu(ctx context.Context, chatID int64) {
+	available := providers.AvailableProviders(c.appConfig)
+	if len(available) == 0 {
+		msg := tu.Message(tu.ID(chatID), "No hay providers configurados con credenciales.")
+		_, _ = c.bot.SendMessage(ctx, msg)
 		return
 	}
 
-	modelName := strings.TrimPrefix(query.Data, "model:")
+	currentProvider := strings.ToLower(c.appConfig.Agents.Defaults.Provider)
+
+	var buttons []telego.InlineKeyboardButton
+	for _, p := range available {
+		label := p
+		if p == currentProvider {
+			label = "\u2705 " + p
+		}
+		buttons = append(buttons, tu.InlineKeyboardButton(label).WithCallbackData("provider:"+p))
+	}
+
+	keyboard := tu.InlineKeyboardGrid(tu.InlineKeyboardCols(2, buttons...))
+	msg := tu.Message(tu.ID(chatID), fmt.Sprintf("Provider actual: %s\nElegí un provider:", currentProvider))
+	msg.ReplyMarkup = keyboard
+
+	if _, err := c.bot.SendMessage(ctx, msg); err != nil {
+		logger.ErrorCF("telegram", "Failed to send provider menu", map[string]interface{}{
+			"error": err.Error(),
+		})
+	}
+}
+
+func (c *TelegramChannel) handleCallbackQuery(ctx context.Context, update telego.Update) {
+	query := update.CallbackQuery
+	if query == nil {
+		return
+	}
+
+	var command, displayText, answerText string
+	switch {
+	case strings.HasPrefix(query.Data, "model:"):
+		modelName := strings.TrimPrefix(query.Data, "model:")
+		command = "/model " + modelName
+		displayText = "\u2705 Modelo: " + modelName
+		answerText = "Cambiando a " + modelName + "..."
+	case strings.HasPrefix(query.Data, "provider:"):
+		providerName := strings.TrimPrefix(query.Data, "provider:")
+		command = "/provider " + providerName
+		displayText = "\u2705 Provider: " + providerName
+		answerText = "Cambiando a " + providerName + "..."
+	default:
+		return
+	}
 
 	// Answer the callback to dismiss the spinner
-	_ = c.bot.AnswerCallbackQuery(ctx, tu.CallbackQuery(query.ID).WithText("Cambiando a "+modelName+"..."))
+	_ = c.bot.AnswerCallbackQuery(ctx, tu.CallbackQuery(query.ID).WithText(answerText))
 
 	// Edit original message to show selection, remove buttons
 	if query.Message != nil {
 		editParams := &telego.EditMessageTextParams{
 			ChatID:    tu.ID(query.Message.GetChat().ID),
 			MessageID: query.Message.GetMessageID(),
-			Text:      "\u2705 Modelo: " + modelName,
+			Text:      displayText,
 		}
 		_, _ = c.bot.EditMessageText(ctx, editParams)
 	}
 
-	// Publish to bus so AgentLoop handles the actual model change
+	// Publish to bus so AgentLoop handles the actual change
 	userID := fmt.Sprintf("%d", query.From.ID)
 	senderID := userID
 	if query.From.Username != "" {
@@ -697,7 +764,7 @@ func (c *TelegramChannel) handleCallbackQuery(ctx context.Context, update telego
 		chatIDStr = fmt.Sprintf("%d", query.Message.GetChat().ID)
 	}
 
-	c.HandleMessage(senderID, chatIDStr, "/model "+modelName, nil, map[string]string{
+	c.HandleMessage(senderID, chatIDStr, command, nil, map[string]string{
 		"user_id":  userID,
 		"username": query.From.Username,
 	})
