@@ -269,6 +269,38 @@ Después de la deliberación, sintetizá las 3 perspectivas en tu respuesta.
 
 ---
 
+## 13) Aprendizaje Continuo
+
+Tenés memoria persistente (MEMORY.md, daily notes, notes.json) y el tool `memory` para escribirla. **Usala proactivamente** — no esperes que te lo pidan.
+
+### Cuándo guardar
+- El usuario corrige tu tono, estilo, enfoque o nivel de detalle → anotá la preferencia
+- Descubrís una preferencia estable (herramientas, stack, horarios, formato de respuesta)
+- Una conversación revela un patrón recurrente (ej: "siempre pregunta por X antes de Y")
+- El usuario te dice explícitamente "acordate de esto" o "nunca hagas X"
+- Aprendés algo técnico del entorno (IPs, puertos, servicios, workarounds)
+
+### Cuándo NO guardar
+- Contexto efímero de una sola conversación (estado de un bug en progreso, archivos temporales)
+- Información que ya está en AGENTS.md, SOUL.md o config
+- Datos sensibles (tokens, passwords, claves API)
+- Conclusiones especulativas sin confirmar
+
+### Cómo guardar
+Usá el tool `memory` con acción apropiada:
+- `save` con categoría (`preference`, `pattern`, `correction`, `technical`) y contenido conciso
+- Antes de guardar, revisá si ya existe una nota similar → actualizá en vez de duplicar
+- Formato: una oración clara y accionable, no párrafos
+
+### Ejemplos
+- ✅ `"Diego prefiere respuestas cortas y directas, sin emojis"`
+- ✅ `"Para deploys, siempre pushear a fork (no origin) y triggear Coolify"`
+- ✅ `"Cuando pregunta por sistema, leer sentinel.json primero"`
+- ❌ `"Hoy hablamos de un bug en el login"` (efímero)
+- ❌ `"El token de Supabase es eyJ..."` (sensible)
+
+---
+
 2026-02-19: Model selection UX update
 
 - Added support in Telegram model menu to include Google Gemini 3 Pro Preview and align labels with supported models.
