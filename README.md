@@ -13,7 +13,7 @@
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Go-1.22+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
+  <img src="https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white" alt="Go">
   <img src="https://img.shields.io/badge/Platform-Raspberry%20Pi%205-C51A4A?style=flat-square&logo=raspberrypi&logoColor=white" alt="Raspberry Pi">
   <img src="https://img.shields.io/badge/Channel-Telegram-26A5E4?style=flat-square&logo=telegram&logoColor=white" alt="Telegram">
   <img src="https://img.shields.io/badge/LLM-OpenRouter-8B5CF6?style=flat-square" alt="OpenRouter">
@@ -34,9 +34,11 @@ Built in Go, containerized with Docker, and deployed via Coolify. Zero cloud dep
 
 ### Conversation & Intelligence
 - **Multi-model support** — Switch between 9+ LLMs on-the-fly via `/model` command (GPT-4o, Claude, Gemini, DeepSeek, etc.)
+- **Runtime provider switching** — `/provider` command to change LLM providers without restart
 - **Persistent memory** — Key-value store for long-term context across sessions
 - **Session summarization** — Automatic context compression to stay within token limits
 - **Subagent system** — Spawn parallel agents for complex multi-step tasks
+- **Continuous learning** — Nightly reflection cycle extracts patterns from daily conversations and stores them as persistent memories
 
 ### Web & Search
 - **Google Search (Serper)** — Priority search provider with Google-quality results
@@ -44,8 +46,8 @@ Built in Go, containerized with Docker, and deployed via Coolify. Zero cloud dep
 - **DuckDuckGo** — HTML scraping as last resort
 - **Web Fetch** — Extract readable content from any URL
 
-### Google Workspace
-- **Calendar** — Read events, create appointments, manage multiple calendars via service account
+### Google Workspace *(optional — requires service account credentials)*
+- **Calendar** — Read events, create appointments, manage multiple calendars
 - **Gmail** — Read, search, send, and reply to emails
 - **Drive** — List, search, and read documents
 
@@ -55,6 +57,10 @@ Built in Go, containerized with Docker, and deployed via Coolify. Zero cloud dep
 - **Image generation** — Pollinations.ai with HTTP validation and automatic retries
 - **YouTube** — Extract transcripts from YouTube videos
 
+### Smart Home & IoT
+- **Lights** — Magic Home WiFi device control (RGB strips, bulbs) via UDP discovery + TCP commands
+- **I2C / SPI** — Direct hardware bus interaction for IoT peripherals
+
 ### Automation & Productivity
 - **Reminders** — Schedule notifications delivered via Telegram
 - **Tasks** — Persistent goal and task tracking
@@ -63,11 +69,10 @@ Built in Go, containerized with Docker, and deployed via Coolify. Zero cloud dep
 - **Heartbeat** — Periodic check-ins with proactive notifications (every 45min)
 - **Telemetry** — Token usage tracking per feature (chat, heartbeat, cron, summarize) with daily breakdown, 30-day retention
 
-### Monitoring & Hardware
+### Monitoring & System
 - **Sentinel** — Go-pure system health monitor (CPU temp, RAM, disk) every 2min with critical alerts direct to Telegram
 - **Shell execution** — Run commands inside the container
 - **Host access** — Execute commands on the Raspberry Pi host via `nsenter`
-- **I2C / SPI** — Direct hardware bus interaction for IoT peripherals
 - **HTTP requests** — Arbitrary API calls to external services
 
 ### Council of Experts
@@ -97,7 +102,7 @@ Built in Go, containerized with Docker, and deployed via Coolify. Zero cloud dep
                     │                           │             │
                     │              ┌────────────▼──────────┐  │
                     │              │     ToolRegistry      │  │
-                    │              │  27 tools available   │  │
+                    │              │  30 tools available   │  │
                     │              └───────────────────────┘  │
                     │                                         │
                     │  LLM: OpenRouter ──► GPT-4o / Claude /  │
@@ -112,7 +117,7 @@ Built in Go, containerized with Docker, and deployed via Coolify. Zero cloud dep
 | Agent Loop | `pkg/agent/loop.go` | Core message processing, LLM iteration, tool execution |
 | Context Builder | `pkg/agent/context.go` | System prompt assembly (identity + skills + memory) |
 | Telegram Channel | `pkg/channels/telegram.go` | Polling, TTS, voice transcription, inline keyboards |
-| Tool Registry | `pkg/tools/` | 27 tools — web, calendar, exec, memory, media, telemetry, etc. |
+| Tool Registry | `pkg/tools/` | 30 tools — web, calendar, exec, memory, media, lights, telemetry, etc. |
 | Config | `pkg/config/config.go` | JSON config with env var overrides |
 | Session Manager | `pkg/session/` | Conversation history, summarization, persistence |
 | Sentinel | `pkg/sentinel/service.go` | System health monitor (CPU temp, RAM, disk) with alerts |
