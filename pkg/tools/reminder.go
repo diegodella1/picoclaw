@@ -106,15 +106,38 @@ func (t *ReminderTool) StartPendingReminders() {
 	reminders := t.loadRemindersLocked()
 	maxID := 0
 
+	// Purge fired reminders older than 24h
+	cutoff := time.Now().Add(-24 * time.Hour)
+	kept := reminders[:0]
+	purged := 0
+	for _, r := range reminders {
+		if r.Fired {
+			if firedAt, err := time.Parse(time.RFC3339, r.DueAt); err == nil && firedAt.Before(cutoff) {
+				purged++
+				continue
+			}
+		}
+		kept = append(kept, r)
+	}
+	reminders = kept
+	if purged > 0 {
+		t.saveRemindersLocked(reminders)
+		logger.InfoCF("reminder", "Purged old fired reminders", map[string]interface{}{
+			"purged": purged,
+			"remaining": len(reminders),
+		})
+	}
+
 	for i := range reminders {
 		r := &reminders[i]
-		if r.Fired {
-			continue
-		}
 
-		// Parse the ID for nextID tracking
+		// Track maxID across ALL reminders (fired + unfired) for unique IDs
 		if id, err := strconv.Atoi(r.ID); err == nil && id > maxID {
 			maxID = id
+		}
+
+		if r.Fired {
+			continue
 		}
 
 		dueAt, err := time.Parse(time.RFC3339, r.DueAt)

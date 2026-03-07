@@ -45,11 +45,13 @@ type TelegramChannel struct {
 	bot          *telego.Bot
 	config       config.TelegramConfig
 	appConfig    *config.Config
+	configPath   string // path to config.json for persistence
 	chatIDs      map[string]int64
 	transcriber  *voice.GroqTranscriber
 	placeholders sync.Map // chatID -> messageID
 	stopThinking sync.Map // chatID -> thinkingCancel
 	voiceInput   sync.Map // chatID -> bool (true if last input was voice/audio)
+	adminUserID  string   // admin user ID for /join, /leave commands
 }
 
 var defaultModels = []string{
@@ -117,6 +119,14 @@ func NewTelegramChannel(cfg config.TelegramConfig, bus *bus.MessageBus, appConfi
 
 func (c *TelegramChannel) SetTranscriber(transcriber *voice.GroqTranscriber) {
 	c.transcriber = transcriber
+}
+
+func (c *TelegramChannel) SetConfigPath(path string) {
+	c.configPath = path
+}
+
+func (c *TelegramChannel) SetAdminUserID(id string) {
+	c.adminUserID = id
 }
 
 func (c *TelegramChannel) Start(ctx context.Context) error {
@@ -383,16 +393,90 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, update telego.Updat
 		senderID = fmt.Sprintf("%s|%s", userID, user.Username)
 	}
 
-	// 检查白名单，避免为被拒绝的用户下载附件
-	if !c.IsAllowed(userID) && !c.IsAllowed(senderID) {
-		logger.DebugCF("telegram", "Message rejected by allowlist", map[string]interface{}{
-			"user_id":  userID,
-			"username": user.Username,
-		})
+	chatID := message.Chat.ID
+	chatIDStr := fmt.Sprintf("%d", chatID)
+	isGroup := message.Chat.Type != "private"
+	isAdmin := c.adminUserID != "" && userID == c.adminUserID
+
+	// Handle /join command — admin adds this group to the allowlist
+	cmdText := strings.TrimSpace(message.Text)
+	// Telegram sends "/join@BotUsername" in groups — normalize
+	if idx := strings.Index(cmdText, "@"); idx > 0 {
+		cmdText = cmdText[:idx]
+	}
+	if isGroup && isAdmin && cmdText == "/join" {
+		c.AddToAllowList(chatIDStr)
+		// Persist to config
+		if c.configPath != "" && c.appConfig != nil {
+			// Avoid duplicates in persisted config
+			alreadyInConfig := false
+			for _, id := range c.appConfig.Channels.Telegram.AllowFrom {
+				if id == chatIDStr {
+					alreadyInConfig = true
+					break
+				}
+			}
+			if !alreadyInConfig {
+				c.appConfig.Channels.Telegram.AllowFrom = append(c.appConfig.Channels.Telegram.AllowFrom, chatIDStr)
+			}
+			if err := config.SaveConfig(c.configPath, c.appConfig); err != nil {
+				logger.ErrorCF("telegram", "Failed to persist config after /join", map[string]interface{}{"error": err.Error()})
+			}
+		}
+		c.bot.SendMessage(ctx, tu.Message(tu.ID(chatID), "✓ Me uní a este grupo. Mencioname o respondé a mis mensajes para hablar conmigo."))
+		logger.InfoCF("telegram", "Joined group via /join", map[string]interface{}{"chat_id": chatIDStr})
 		return
 	}
 
-	chatID := message.Chat.ID
+	// Handle /leave command — admin removes this group from the allowlist
+	if isGroup && isAdmin && cmdText == "/leave" {
+		c.RemoveFromAllowList(chatIDStr)
+		// Persist to config
+		if c.configPath != "" && c.appConfig != nil {
+			newAllow := make(config.FlexibleStringSlice, 0)
+			for _, id := range c.appConfig.Channels.Telegram.AllowFrom {
+				if id != chatIDStr {
+					newAllow = append(newAllow, id)
+				}
+			}
+			c.appConfig.Channels.Telegram.AllowFrom = newAllow
+			if err := config.SaveConfig(c.configPath, c.appConfig); err != nil {
+				logger.ErrorCF("telegram", "Failed to persist config after /leave", map[string]interface{}{"error": err.Error()})
+			}
+		}
+		c.bot.SendMessage(ctx, tu.Message(tu.ID(chatID), "Listo, me retiro de este grupo. Chau!"))
+		logger.InfoCF("telegram", "Left group via /leave", map[string]interface{}{"chat_id": chatIDStr})
+		return
+	}
+
+	if isGroup {
+		// In groups, check if the group chat ID is in the allowlist
+		if !c.IsAllowedChat(chatIDStr) {
+			return
+		}
+		// Only respond when mentioned or replied to
+		botUsername := c.bot.Username()
+		mentioned := botUsername != "" && strings.Contains(message.Text, "@"+botUsername)
+		repliedToBot := message.ReplyToMessage != nil && message.ReplyToMessage.From != nil && message.ReplyToMessage.From.IsBot
+		if !mentioned && !repliedToBot {
+			return
+		}
+		// Strip the mention from the text so the LLM gets clean input
+		if mentioned && botUsername != "" {
+			message.Text = strings.ReplaceAll(message.Text, "@"+botUsername, "")
+			message.Text = strings.TrimSpace(message.Text)
+		}
+	} else {
+		// Private chat: check user allowlist as before
+		if !c.IsAllowed(userID) && !c.IsAllowed(senderID) {
+			logger.DebugCF("telegram", "Message rejected by allowlist", map[string]interface{}{
+				"user_id":  userID,
+				"username": user.Username,
+			})
+			return
+		}
+	}
+
 	c.chatIDs[senderID] = chatID
 
 	// Intercept bare /provider command → show inline keyboard
@@ -410,6 +494,28 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, update telego.Updat
 	content := ""
 	mediaPaths := []string{}
 	localFiles := []string{} // 跟踪需要清理的本地文件
+
+	// Include quoted/replied message text for context
+	if reply := message.ReplyToMessage; reply != nil {
+		quotedText := reply.Text
+		if quotedText == "" {
+			quotedText = reply.Caption
+		}
+		if quotedText != "" {
+			fromName := ""
+			if reply.From != nil {
+				fromName = reply.From.FirstName
+				if reply.From.Username != "" {
+					fromName = "@" + reply.From.Username
+				}
+			}
+			if fromName != "" {
+				content = fmt.Sprintf("[En respuesta a %s: \"%s\"]\n", fromName, quotedText)
+			} else {
+				content = fmt.Sprintf("[En respuesta a: \"%s\"]\n", quotedText)
+			}
+		}
+	}
 
 	// 确保临时文件在函数返回时被清理
 	defer func() {
@@ -563,7 +669,6 @@ func (c *TelegramChannel) handleMessage(ctx context.Context, update telego.Updat
 	}
 
 	// Stop any previous thinking animation
-	chatIDStr := fmt.Sprintf("%d", chatID)
 	if prevStop, ok := c.stopThinking.Load(chatIDStr); ok {
 		if cf, ok := prevStop.(*thinkingCancel); ok && cf != nil {
 			cf.Cancel()

@@ -82,6 +82,37 @@ func (c *BaseChannel) IsAllowed(senderID string) bool {
 	return false
 }
 
+// IsAllowedChat checks if a chat ID (group or user) is in the allow list.
+func (c *BaseChannel) IsAllowedChat(chatID string) bool {
+	for _, allowed := range c.allowList {
+		if chatID == allowed {
+			return true
+		}
+	}
+	return false
+}
+
+// AddToAllowList adds an ID to the allow list at runtime.
+func (c *BaseChannel) AddToAllowList(id string) {
+	for _, existing := range c.allowList {
+		if existing == id {
+			return // already exists
+		}
+	}
+	c.allowList = append(c.allowList, id)
+}
+
+// RemoveFromAllowList removes an ID from the allow list at runtime.
+func (c *BaseChannel) RemoveFromAllowList(id string) bool {
+	for i, existing := range c.allowList {
+		if existing == id {
+			c.allowList = append(c.allowList[:i], c.allowList[i+1:]...)
+			return true
+		}
+	}
+	return false
+}
+
 func (c *BaseChannel) HandleMessage(senderID, chatID, content string, media []string, metadata map[string]string) {
 	if !c.IsAllowed(senderID) {
 		return

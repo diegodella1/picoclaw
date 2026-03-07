@@ -660,6 +660,22 @@ func gatewayCmd() {
 		os.Exit(1)
 	}
 
+	// Configure Telegram channel for group support
+	if telegramCh, ok := channelManager.GetChannel("telegram"); ok {
+		if tc, ok := telegramCh.(*channels.TelegramChannel); ok {
+			tc.SetConfigPath(getConfigPath())
+			// Set admin from first allow_from entry (owner)
+			if len(cfg.Channels.Telegram.AllowFrom) > 0 {
+				adminID := string(cfg.Channels.Telegram.AllowFrom[0])
+				// Strip compound "id|username" → just the ID
+				if idx := strings.Index(adminID, "|"); idx > 0 {
+					adminID = adminID[:idx]
+				}
+				tc.SetAdminUserID(adminID)
+			}
+		}
+	}
+
 	var transcriber *voice.GroqTranscriber
 	if cfg.Providers.Groq.APIKey != "" {
 		transcriber = voice.NewGroqTranscriber(cfg.Providers.Groq.APIKey)
