@@ -1,0 +1,12 @@
+{
+  "slug": "test-topic",
+  "title": "Test Topic",
+  "description": "A test knowledge topic for verification",
+  "keywords": ["test", "knowledge", "verification", "demo"],
+  "status": "ready",
+  "created_at": "2026-03-07T19:00:00Z",
+  "updated_at": "2026-03-07T19:00:00Z",
+  "version": 1,
+  "char_count": 50,
+  "auto_inject": true
+}

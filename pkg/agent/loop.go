@@ -21,6 +21,8 @@ import (
 	"github.com/sipeed/picoclaw/pkg/bus"
 	"github.com/sipeed/picoclaw/pkg/config"
 	"github.com/sipeed/picoclaw/pkg/constants"
+	"github.com/sipeed/picoclaw/pkg/experiments"
+	"github.com/sipeed/picoclaw/pkg/knowledge"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/session"
@@ -190,10 +192,20 @@ func NewAgentLoop(cfg *config.Config, msgBus *bus.MessageBus, provider providers
 	// Create state manager for atomic state persistence
 	stateManager := state.NewManager(workspace)
 
+	// Create knowledge loader and experiments store
+	knowledgeLoader := knowledge.NewLoader(workspace)
+	experimentsStore := experiments.NewStore(workspace)
+
+	// Register learn tool (needs knowledge loader and subagent manager)
+	learnTool := tools.NewLearnTool(workspace, knowledgeLoader, subagentManager)
+	toolsRegistry.Register(learnTool)
+
 	// Create context builder and set tools registry
 	contextBuilder := NewContextBuilder(workspace)
 	contextBuilder.SetToolsRegistry(toolsRegistry)
 	contextBuilder.SetModel(cfg.Agents.Defaults.Model)
+	contextBuilder.SetKnowledgeLoader(knowledgeLoader)
+	contextBuilder.SetExperiments(experimentsStore)
 
 	// Wire system prompt builder so subagents inherit the main agent's personality
 	subagentManager.SetSystemPromptBuilder(contextBuilder.BuildSystemPrompt)

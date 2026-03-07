@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/sipeed/picoclaw/pkg/experiments"
+	"github.com/sipeed/picoclaw/pkg/knowledge"
 	"github.com/sipeed/picoclaw/pkg/logger"
 	"github.com/sipeed/picoclaw/pkg/providers"
 	"github.com/sipeed/picoclaw/pkg/skills"
@@ -15,11 +17,13 @@ import (
 )
 
 type ContextBuilder struct {
-	workspace    string
-	skillsLoader *skills.SkillsLoader
-	memory       *MemoryStore
-	tools        *tools.ToolRegistry // Direct reference to tool registry
-	model        string
+	workspace       string
+	skillsLoader    *skills.SkillsLoader
+	memory          *MemoryStore
+	tools           *tools.ToolRegistry // Direct reference to tool registry
+	model           string
+	knowledgeLoader *knowledge.Loader
+	experiments     *experiments.Store
 }
 
 func getGlobalConfigDir() string {
@@ -52,6 +56,16 @@ func (cb *ContextBuilder) SetToolsRegistry(registry *tools.ToolRegistry) {
 // SetModel sets the current model name for inclusion in the system prompt.
 func (cb *ContextBuilder) SetModel(model string) {
 	cb.model = model
+}
+
+// SetKnowledgeLoader sets the knowledge loader for context injection.
+func (cb *ContextBuilder) SetKnowledgeLoader(loader *knowledge.Loader) {
+	cb.knowledgeLoader = loader
+}
+
+// SetExperiments sets the experiments store for behavioral adjustments.
+func (cb *ContextBuilder) SetExperiments(store *experiments.Store) {
+	cb.experiments = store
 }
 
 func (cb *ContextBuilder) getIdentity() string {
@@ -127,6 +141,14 @@ func (cb *ContextBuilder) BuildSystemPrompt() string {
 		parts = append(parts, bootstrapContent)
 	}
 
+	// Active behavioral adjustments (experiments)
+	if cb.experiments != nil {
+		adjustments := cb.experiments.BuildAdjustmentsPrompt()
+		if adjustments != "" {
+			parts = append(parts, adjustments)
+		}
+	}
+
 	// Skills - show summary, AI can read full content with read_file tool
 	skillsSummary := cb.skillsLoader.BuildSkillsSummary()
 	if skillsSummary != "" {
@@ -170,6 +192,16 @@ func (cb *ContextBuilder) BuildMessages(history []providers.Message, summary str
 	messages := []providers.Message{}
 
 	systemPrompt := cb.BuildSystemPrompt()
+
+	// Inject knowledge context based on user message
+	if cb.knowledgeLoader != nil && currentMessage != "" {
+		knowledgeCtx := cb.knowledgeLoader.BuildContext(currentMessage, 0)
+		if knowledgeCtx != "" {
+			systemPrompt += "\n\n---\n\n" + knowledgeCtx
+			logger.DebugCF("agent", "Knowledge context injected",
+				map[string]interface{}{"chars": len(knowledgeCtx)})
+		}
+	}
 
 	// Add Current Session info if provided
 	if channel != "" && chatID != "" {

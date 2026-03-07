@@ -130,7 +130,7 @@ func (ms *MemoryStore) GetRecentDailyNotes(days int) string {
 
 // maxMemoryChars is the maximum character length for the memory context
 // injected into the system prompt, to prevent context window bloat.
-const maxMemoryChars = 4000
+const maxMemoryChars = 6000
 
 // GetMemoryContext returns formatted memory context for the agent prompt.
 // Includes long-term memory and recent daily notes.
