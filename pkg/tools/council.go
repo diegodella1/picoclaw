@@ -26,9 +26,9 @@ func (t *CouncilTool) Name() string {
 }
 
 func (t *CouncilTool) Description() string {
-	return "Convene the LinkedIn PR council (El Redactor, El Estratega, El Editor) to create a professional LinkedIn post. " +
+	return "Convene the strategic CEO council (Red Team, Strategic Innovator, Chief of Staff) to deliberate on a question or scenario. " +
 		"Each member responds sequentially in a Telegram group, building on the previous member's work. " +
-		"Use this when the user asks '/consejo' or wants to create/improve a LinkedIn post."
+		"Use this when the user asks '/consejo' or wants strategic advice on a decision, opportunity, or challenge."
 }
 
 func (t *CouncilTool) Parameters() map[string]interface{} {
