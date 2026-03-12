@@ -77,9 +77,13 @@ func (p *LlamaCppProvider) chatServer(ctx context.Context, messages []Message, t
 		model = p.defaultMdl
 	}
 
-	// Small local models: reduce max_tokens to avoid OOM
-	if _, ok := options["max_tokens"]; !ok {
-		options["max_tokens"] = p.maxTokens()
+	// Cap max_tokens to what the local model can handle.
+	// The global config may send 8192+ but our context window is much smaller.
+	maxTok := p.maxTokens()
+	if mt, ok := options["max_tokens"].(int); ok && mt > maxTok {
+		options["max_tokens"] = maxTok
+	} else if !ok {
+		options["max_tokens"] = maxTok
 	}
 
 	resp, err := p.httpProv.Chat(ctx, messages, tools, model, options)
