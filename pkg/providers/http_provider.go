@@ -284,6 +284,9 @@ func AvailableProviders(cfg *config.Config) []string {
 	if cfg.Providers.DeepSeek.APIKey != "" {
 		available = append(available, "deepseek")
 	}
+	if cfg.Providers.LlamaCpp.Enabled {
+		available = append(available, "llamacpp")
+	}
 	return available
 }
 
@@ -391,6 +394,9 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 			}
 			return NewGitHubCopilotProvider(apiBase, cfg.Providers.GitHubCopilot.ConnectMode, model)
 
+		case "llamacpp", "llama", "local", "qwen":
+			return CreateLlamaCppProvider(cfg)
+
 		}
 
 	}
@@ -474,6 +480,9 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 			apiBase = cfg.Providers.VLLM.APIBase
 			proxy = cfg.Providers.VLLM.Proxy
 
+		case (strings.Contains(lowerModel, "qwen") || strings.Contains(lowerModel, "llama-cpp") || lowerModel == "local") && cfg.Providers.LlamaCpp.Enabled:
+			return CreateLlamaCppProvider(cfg)
+
 		default:
 			if cfg.Providers.OpenRouter.APIKey != "" {
 				apiKey = cfg.Providers.OpenRouter.APIKey
@@ -497,5 +506,19 @@ func CreateProvider(cfg *config.Config) (LLMProvider, error) {
 		return nil, fmt.Errorf("no API base configured for provider (model: %s)", model)
 	}
 
-	return NewHTTPProvider(apiKey, apiBase, proxy), nil
+	primary := NewHTTPProvider(apiKey, apiBase, proxy)
+
+	// Wrap with local fallback if configured
+	if cfg.Providers.LlamaCpp.Enabled && cfg.Providers.LlamaCpp.Fallback {
+		fallback, err := CreateLlamaCppProvider(cfg)
+		if err != nil {
+			logger.WarnCF("provider", "LlamaCpp fallback configured but failed to create", map[string]interface{}{
+				"error": err.Error(),
+			})
+			return primary, nil
+		}
+		return NewFallbackProvider(primary, fallback), nil
+	}
+
+	return primary, nil
 }

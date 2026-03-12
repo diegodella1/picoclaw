@@ -209,6 +209,23 @@ type ProvidersConfig struct {
 	ShengSuanYun  ProviderConfig `json:"shengsuanyun"`
 	DeepSeek      ProviderConfig `json:"deepseek"`
 	GitHubCopilot ProviderConfig `json:"github_copilot"`
+	LlamaCpp      LlamaCppConfig `json:"llamacpp"`
+}
+
+// LlamaCppConfig configures local inference via llama.cpp (Qwen, etc.)
+type LlamaCppConfig struct {
+	Enabled      bool    `json:"enabled" env:"PICOCLAW_PROVIDERS_LLAMACPP_ENABLED"`
+	Mode         string  `json:"mode" env:"PICOCLAW_PROVIDERS_LLAMACPP_MODE"`                   // "server" or "binary"
+	APIBase      string  `json:"api_base" env:"PICOCLAW_PROVIDERS_LLAMACPP_API_BASE"`            // server mode: e.g. http://localhost:8080/v1
+	BinaryPath   string  `json:"binary_path" env:"PICOCLAW_PROVIDERS_LLAMACPP_BINARY_PATH"`      // binary mode: path to llama-cli
+	ModelPath    string  `json:"model_path" env:"PICOCLAW_PROVIDERS_LLAMACPP_MODEL_PATH"`        // binary mode: path to .gguf file
+	DefaultModel string  `json:"default_model" env:"PICOCLAW_PROVIDERS_LLAMACPP_DEFAULT_MODEL"`  // model name for server mode
+	ContextSize  int     `json:"context_size" env:"PICOCLAW_PROVIDERS_LLAMACPP_CONTEXT_SIZE"`    // context window (default 2048)
+	Threads      int     `json:"threads" env:"PICOCLAW_PROVIDERS_LLAMACPP_THREADS"`              // CPU threads (default 4)
+	GPULayers    int     `json:"gpu_layers" env:"PICOCLAW_PROVIDERS_LLAMACPP_GPU_LAYERS"`        // GPU offload layers (0 for Pi 5)
+	MaxTokens    int     `json:"max_tokens" env:"PICOCLAW_PROVIDERS_LLAMACPP_MAX_TOKENS"`        // max output tokens (default 512)
+	Temperature  float64 `json:"temperature" env:"PICOCLAW_PROVIDERS_LLAMACPP_TEMPERATURE"`      // sampling temperature
+	Fallback     bool    `json:"fallback" env:"PICOCLAW_PROVIDERS_LLAMACPP_FALLBACK"`            // use as fallback when cloud fails
 }
 
 type ProviderConfig struct {
